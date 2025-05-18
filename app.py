@@ -1,80 +1,98 @@
 import streamlit as st
 import random
 
-# 基础配置（确保最低资源消耗）
+# 基础设置
 st.set_page_config(
     page_title="家务分配助手",
     page_icon="🧹",
     layout="centered"
 )
 
-# 初始化数据（仅用基础数据类型）
-if 'tasks' not in st.session_state:
-    st.session_state.tasks = []
+# 初始化数据（带默认值）
 if 'members' not in st.session_state:
-    st.session_state.members = ["👨 爸爸", "👩 妈妈"]
+    st.session_state.members = ["爸爸", "妈妈", "孩子"]  # 默认成员
+
+if 'tasks' not in st.session_state:
+    st.session_state.tasks = ["洗碗", "拖地", "倒垃圾"]  # 默认任务
+
+if 'assignments' not in st.session_state:
+    st.session_state.assignments = {}
 
 # 主界面
 st.title("🧹 家务分配助手")
 
-# 1. 成员管理（纯输入框+按钮）
-with st.expander("👥 管理家庭成员", expanded=True):
-    new_member = st.text_input("输入成员昵称", key="member_input")
-    col1, col2 = st.columns(2)
-    with col1:
-        if st.button("添加成员", key="add_member"):
-            if new_member and new_member not in st.session_state.members:
-                st.session_state.members.append(new_member)
-    with col2:
-        if st.button("清空成员", key="clear_members"):
-            st.session_state.members = ["👨 爸爸", "👩 妈妈"]
-    
-    st.write("**当前成员:**", ", ".join(st.session_state.members))
+# 1. 编辑家庭成员
+st.subheader("家庭成员")
+member_col1, member_col2 = st.columns([4, 1])
+with member_col1:
+    new_member = st.text_input("添加新成员", placeholder="输入称呼")
+with member_col2:
+    if st.button("添加", key="add_member") and new_member:
+        if new_member not in st.session_state.members:
+            st.session_state.members.append(new_member)
 
-# 2. 任务管理（无复杂操作）
-with st.expander("📝 管理家务任务", expanded=True):
-    new_task = st.text_input("输入任务名称", key="task_input")
-    if st.button("添加任务", key="add_task") and new_task:
-        st.session_state.tasks.append({
-            "name": new_task,
-            "assigned": None,
-            "done": False
-        })
+# 显示成员列表（带删除功能）
+for i, member in enumerate(st.session_state.members[:]):  # 创建副本用于迭代
+    col1, col2 = st.columns([4, 1])
+    col1.write(f"👤 {member}")
+    if col2.button("删除", key=f"del_member_{i}"):
+        st.session_state.members.remove(member)
+        st.rerun()
 
-# 3. 任务分配与展示（纯按钮交互）
-if st.session_state.tasks:
-    st.divider()
-    st.subheader("🗒️ 当前家务清单")
-    
-    # 分配按钮
-    if st.button("✨ 一键智能分配", type="primary"):
-        if st.session_state.members:
-            for task in st.session_state.tasks:
-                if not task["done"]:
-                    task["assigned"] = random.choice(st.session_state.members)
-    
-    # 任务列表
-    for i, task in enumerate(st.session_state.tasks):
-        status = "✅" if task["done"] else "⏳"
-        assigned = task["assigned"] or "未分配"
+# 2. 编辑家务清单
+st.subheader("家务清单")
+task_col1, task_col2 = st.columns([4, 1])
+with task_col1:
+    new_task = st.text_input("添加新任务", placeholder="输入任务名称")
+with task_col2:
+    if st.button("添加", key="add_task") and new_task:
+        if new_task not in st.session_state.tasks:
+            st.session_state.tasks.append(new_task)
+
+# 显示任务列表（带删除功能）
+for i, task in enumerate(st.session_state.tasks[:]):
+    col1, col2 = st.columns([4, 1])
+    col1.write(f"📌 {task}")
+    if col2.button("删除", key=f"del_task_{i}"):
+        st.session_state.tasks.remove(task)
+        st.rerun()
+
+# 3. 分配功能
+st.divider()
+if st.button("🚀 一键分配家务", type="primary"):
+    if not st.session_state.members:
+        st.error("请先添加家庭成员")
+    elif not st.session_state.tasks:
+        st.error("请先添加家务任务")
+    else:
+        # 随机分配逻辑
+        shuffled_tasks = random.sample(st.session_state.tasks, len(st.session_state.tasks))
+        shuffled_members = random.sample(st.session_state.members, len(st.session_state.members))
         
-        cols = st.columns([1, 3, 2, 2])
-        cols[0].write(status)
-        cols[1].write(task["name"])
-        cols[2].write(assigned)
+        # 确保每个成员分配到大致相等的任务数量
+        assignments = {}
+        for i, task in enumerate(shuffled_tasks):
+            member = shuffled_members[i % len(shuffled_members)]
+            if member not in assignments:
+                assignments[member] = []
+            assignments[member].append(task)
         
-        if cols[3].button("完成", key=f"complete_{i}"):
-            task["done"] = True
-            st.rerun()
-else:
-    st.info("暂无家务任务，请先添加")
+        st.session_state.assignments = assignments
+        st.success("分配完成！")
 
-# 重置功能
-if st.button("🔄 重置所有数据", type="secondary"):
-    st.session_state.tasks = []
-    st.session_state.members = ["👨 爸爸", "👩 妈妈"]
+# 4. 显示分配结果
+if st.session_state.assignments:
+    st.subheader("分配结果")
+    for member, tasks in st.session_state.assignments.items():
+        with st.expander(f"👤 {member} 的任务"):
+            for task in tasks:
+                st.write(f"• {task}")
+
+# 重置按钮
+if st.button("🔄 重置分配结果"):
+    st.session_state.assignments = {}
     st.rerun()
 
-# 页脚说明
+# 页脚
 st.divider()
-st.caption("💡 数据仅在当前会话中保存，刷新页面会重置")
+st.caption("数据仅在当前会话中保存")
